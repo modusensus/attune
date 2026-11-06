@@ -1,0 +1,16 @@
+{
+  "name": "attune",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Realtime voice conversation engine for replaceable characters. It learns how to listen.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/cli.ts",
+    "test": "node --test \"test/*.test.ts\"",
+    "accept": "node scripts/accept.ts"
+  }
+}

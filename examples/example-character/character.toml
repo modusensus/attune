@@ -1,0 +1,22 @@
+# A placeholder character. It exists so the engine can be exercised without
+# shipping any real character asset: the repo stays at zero IP.
+#
+# To make your own, copy this directory, edit character.toml and persona.md.
+# Nothing in the engine refers to a character by name.
+
+[identity]
+name = "小满"
+persona = "persona.md"
+memory_namespace = "example"
+
+[voice]
+engine = "none"
+model = "none"
+
+[renderer]
+type = "none"
+model = "none"
+
+[mapping]
+backchannel_nod = 0.6
+turn_take_blink = true
