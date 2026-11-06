@@ -261,3 +261,35 @@ test("a speech failure does not cost the transcript", async () => {
     await s.cleanup();
   }
 });
+test("stage directions are spoken out of, not aloud", async () => {
+  const speech = new StubSpeech();
+  const s = await setupVoice(["（笑）你还知道回来。"], speech);
+  try {
+    const events = await collect(s.engine.turn("我回来了"));
+    const reply = events.find((e) => e.type === "reply") as { text: string };
+    const speechEvent = events.find((e) => e.type === "speech") as { text: string };
+    // The transcript keeps the direction; the voice does not.
+    assert.equal(reply.text, "（笑）你还知道回来。");
+    assert.equal(speechEvent.text, "你还知道回来。");
+  } finally {
+    await s.cleanup();
+  }
+});
+
+test("a reply that is only a stage direction is not spoken at all", async () => {
+  const speech = new StubSpeech();
+  const s = await setupVoice(["（沉默）"], speech);
+  try {
+    const events = await collect(s.engine.turn("在吗"));
+    assert.equal(events.filter((e) => e.type === "speech").length, 0);
+    assert.equal(events.filter((e) => e.type === "mouth").length, 0);
+    const silent = events.find((e) => e.type === "silent-turn") as { reason: string };
+    assert.ok(silent, "the renderer is told why nothing was said");
+    assert.equal(silent.reason, "nothing speakable in the reply");
+    assert.deepEqual(speech.calls, []);
+    // The transcript still has the reply.
+    assert.equal((events.find((e) => e.type === "reply") as { text: string }).text, "（沉默）");
+  } finally {
+    await s.cleanup();
+  }
+});

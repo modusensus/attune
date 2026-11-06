@@ -112,6 +112,8 @@ async function main(): Promise<number> {
         } else if (event.type === "mouth") {
           const voiced = event.frames.filter((f) => f.open > 0.1).length;
           process.stdout.write("\n  [mouth: " + event.frames.length + " frames, " + voiced + " voiced]");
+        } else if (event.type === "silent-turn") {
+          process.stdout.write("\n  [nothing to say aloud: " + event.reason + "]");
         } else if (event.type === "reply") {
           process.stdout.write("\n");
         }

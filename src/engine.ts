@@ -1,6 +1,7 @@
 import { MemoryStore, nowIso } from "./memory.ts";
 import { buildMessages, loadPersona } from "./persona.ts";
 import { mouthFrames, type EnvelopeOptions } from "./audio/envelope.ts";
+import { isSpeakable, speakableText } from "./audio/script.ts";
 import type { Provider } from "./provider.ts";
 import { SilentSpeech, type SpeechProvider } from "./speech.ts";
 import type { CharacterConfig, EngineEvent, Turn } from "./types.ts";
@@ -86,8 +87,12 @@ export class Engine {
     // whatever audio we actually got.
     await this.memory.append({ role: "assistant", content: finalText, at: nowIso() });
 
-    if (this.voiceEnabled) {
-      const clip = await this.speech.speak(finalText, signal);
+    // Stage directions are for the reader, not for the speaker: a card that
+    // writes （笑） means "smile", not "say the word 笑 inside brackets".
+    const spoken = speakableText(finalText);
+
+    if (this.voiceEnabled && isSpeakable(spoken)) {
+      const clip = await this.speech.speak(spoken, signal);
       // No second "speaking" transition: the text already put us there, and a
       // duplicate state would make every renderer's transition table lie.
       yield {
@@ -98,6 +103,10 @@ export class Engine {
         audio: clip.audio,
       };
       yield { type: "mouth", frames: mouthFrames(clip.audio, this.envelope) };
+    } else if (this.voiceEnabled) {
+      // Nothing pronounceable — the character shrugged. Say so instead of
+      // synthesizing a pause nobody asked for.
+      yield { type: "silent-turn", reason: "nothing speakable in the reply" };
     }
 
     yield { type: "state", state: "listening" };

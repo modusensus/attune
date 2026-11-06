@@ -26,7 +26,8 @@ export type EngineEvent =
   | { type: "delta"; text: string }
   | { type: "reply"; text: string }
   | { type: "speech"; engine: string; text: string; durationMs: number; audio: WavAudio }
-  | { type: "mouth"; frames: MouthFrame[] };
+  | { type: "mouth"; frames: MouthFrame[] }
+  | { type: "silent-turn"; reason: string };
 
 export interface CharacterConfig {
   name: string;
