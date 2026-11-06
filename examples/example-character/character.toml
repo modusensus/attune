@@ -1,14 +1,14 @@
-# A placeholder character. It exists so the engine can be exercised without
-# shipping any real character asset: the repo stays at zero IP.
-#
-# To make your own, copy this directory, edit character.toml and persona.md.
-# Nothing in the engine refers to a character by name.
-
 [identity]
 name = "小满"
 persona = "persona.md"
-memory_namespace = "example"
+memory_namespace = "xiaoman"
 
+# M2 defaults to no speech engine so that a clone runs on any OS with zero setup.
+# On Windows, "sapi" is the one engine that needs no download:
+#   engine = "sapi"
+#   model  = "Microsoft Huihui Desktop"     (or leave "none" for the first zh voice)
+# Anything OpenAI-compatible (/audio/speech) goes through "http" and the
+# ATTUNE_TTS_BASE_URL / ATTUNE_TTS_MODEL environment variables.
 [voice]
 engine = "none"
 model = "none"

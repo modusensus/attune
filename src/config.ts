@@ -36,6 +36,22 @@ function str(t: TomlTable, key: string, section: string, fallback?: string): str
   return v;
 }
 
+function optStr(t: TomlTable, key: string, section: string): string | undefined {
+  const v = t[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== "string") throw new ConfigError("[" + section + "] " + key + " must be a string");
+  return v;
+}
+
+function optInt(t: TomlTable, key: string, section: string): number | undefined {
+  const v = t[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== "number" || !Number.isInteger(v)) {
+    throw new ConfigError("[" + section + "] " + key + " must be an integer");
+  }
+  return v;
+}
+
 function mappingOf(t: TomlTable): Record<string, string | number | boolean | Array<string | number>> {
   const out: Record<string, string | number | boolean | Array<string | number>> = {};
   for (const [k, v] of Object.entries(t)) {
@@ -83,6 +99,8 @@ export async function loadCharacter(dir: string): Promise<CharacterConfig> {
     voice: {
       engine: str(voice, "engine", "voice", "none"),
       model: str(voice, "model", "voice", "none"),
+      voice: optStr(voice, "voice", "voice"),
+      rate: optInt(voice, "rate", "voice"),
     },
     renderer: {
       type: str(renderer, "type", "renderer", "none"),

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+out/
 *.log
 .DS_Store
 # 角色素材不入库：引擎仓库零 IP

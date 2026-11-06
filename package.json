@@ -11,6 +11,7 @@
   "scripts": {
     "start": "node src/cli.ts",
     "test": "node --test \"test/*.test.ts\"",
-    "accept": "node scripts/accept.ts"
+    "accept": "node scripts/accept.ts",
+    "voice": "node scripts/voice-demo.ts"
   }
 }
