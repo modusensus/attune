@@ -1,5 +1,6 @@
 import type { WavAudio } from "./audio/wav.ts";
 import type { MouthFrame } from "./audio/envelope.ts";
+import type { Gesture } from "./render/gesture.ts";
 
 export type Role = "system" | "user" | "assistant";
 
@@ -27,7 +28,11 @@ export type EngineEvent =
   | { type: "reply"; text: string }
   | { type: "speech"; engine: string; text: string; durationMs: number; audio: WavAudio }
   | { type: "mouth"; frames: MouthFrame[] }
-  | { type: "silent-turn"; reason: string };
+  | { type: "silent-turn"; reason: string }
+  /** Non-verbal reactions the listening layer decided on while the user spoke. */
+  | { type: "gesture"; gestures: Gesture[] }
+  /** The user talked over the character and the reply audio should stop. */
+  | { type: "barge-in"; at: number; rms: number };
 
 export interface CharacterConfig {
   name: string;

@@ -4,6 +4,8 @@ import { mouthFrames, type EnvelopeOptions } from "./audio/envelope.ts";
 import { isSpeakable, speakableText } from "./audio/script.ts";
 import type { Provider } from "./provider.ts";
 import { SilentSpeech, type SpeechProvider } from "./speech.ts";
+import type { ListenSession } from "./listen/session.ts";
+import { readMapping, type RenderMapping } from "./render/mapping.ts";
 import type { CharacterConfig, EngineEvent, Turn } from "./types.ts";
 
 export interface EngineOptions {
@@ -17,6 +19,13 @@ export interface EngineOptions {
   envelope?: EnvelopeOptions;
   /** Synthesize speech at all. Off keeps M1 behaviour exactly. */
   voice?: boolean;
+  /**
+   * The listening layer, when there is a microphone. The engine does not read
+   * audio — it only tells the session which state the character is in, because
+   * "is this pause a full stop" is unanswerable without knowing who has the
+   * floor.
+   */
+  listen?: ListenSession;
 }
 
 /**
@@ -35,7 +44,10 @@ export class Engine {
   private readonly historyLimit: number;
   private readonly envelope: EnvelopeOptions;
   private readonly voiceEnabled: boolean;
+  private readonly listen: ListenSession | null;
   private persona: string | null;
+  /** Validated once, here: a typo in [mapping] must fail at startup, not turn 3. */
+  readonly mapping: RenderMapping;
 
   constructor(options: EngineOptions) {
     this.character = options.character;
@@ -45,7 +57,9 @@ export class Engine {
     this.historyLimit = options.historyLimit ?? 12;
     this.envelope = options.envelope ?? {};
     this.voiceEnabled = options.voice ?? true;
+    this.listen = options.listen ?? null;
     this.persona = options.persona ?? null;
+    this.mapping = readMapping(options.character.mapping);
   }
 
   private async personaText(): Promise<string> {
@@ -57,12 +71,14 @@ export class Engine {
     const text = userText.trim();
     if (!text) throw new Error("empty utterance");
 
+    this.setState("listening");
     yield { type: "state", state: "listening" };
 
     const history: Turn[] = await this.memory.recent(this.historyLimit);
     const persona = await this.personaText();
     const messages = await buildMessages(this.character, persona, history, text);
 
+    this.setState("thinking");
     yield { type: "state", state: "thinking" };
 
     const userTurn: Turn = { role: "user", content: text, at: nowIso() };
@@ -73,6 +89,7 @@ export class Engine {
     for await (const delta of this.provider.stream(messages, signal)) {
       if (!announced) {
         announced = true;
+        this.setState("speaking");
         yield { type: "state", state: "speaking" };
       }
       reply += delta;
@@ -109,7 +126,12 @@ export class Engine {
       yield { type: "silent-turn", reason: "nothing speakable in the reply" };
     }
 
+    this.setState("listening");
     yield { type: "state", state: "listening" };
     yield { type: "reply", text: finalText };
+  }
+
+  private setState(state: "listening" | "thinking" | "speaking"): void {
+    this.listen?.setState(state);
   }
 }

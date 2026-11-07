@@ -151,6 +151,23 @@ export function encodeWav(samples: Float32Array, sampleRate: number): Uint8Array
   return bytes;
 }
 
+/** Resample by linear interpolation. Used to feed models a fixed 16 kHz. */
+export function resample(samples: Float32Array, from: number, to: number): Float32Array {
+  if (from === to) return samples;
+  if (!(from > 0) || !(to > 0)) throw new WavError("resample needs positive rates, got " + from + " -> " + to);
+  const n = Math.max(1, Math.round((samples.length * to) / from));
+  const out = new Float32Array(n);
+  const step = from / to;
+  for (let i = 0; i < n; i++) {
+    const pos = i * step;
+    const i0 = Math.floor(pos);
+    const i1 = Math.min(samples.length - 1, i0 + 1);
+    const frac = pos - i0;
+    out[i] = samples[i0] * (1 - frac) + samples[i1] * frac;
+  }
+  return out;
+}
+
 /** Peak absolute amplitude of the whole buffer, used to tell silence from speech. */
 export function peakOf(samples: Float32Array): number {
   let peak = 0;
