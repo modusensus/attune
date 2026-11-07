@@ -14,7 +14,7 @@ import { describeLoadedRenderer, rendererFromConfig } from "./render/load.ts";
 import { Stage } from "./render/stage.ts";
 
 const USAGE = [
-  "attune - realtime voice conversation engine (M3: ears, mouth, listening)",
+  "attune - realtime voice conversation engine (M5: ears, mouth, listening, 2D/3D rigs)",
   "",
   "usage: node src/cli.ts --character <dir> [--state <dir>] [--text-only] [--say-file <wav>]",
   "",
@@ -275,8 +275,15 @@ async function main(): Promise<number> {
 
     if (text === "/devices") {
       try {
-        const devices = await new FfmpegCapture().listDevices();
-        for (const d of devices) console.log("  " + d.name + (d.alternative ? "  (" + d.alternative + ")" : ""));
+        const capture = new FfmpegCapture();
+        const devices = await capture.listDevices();
+        console.log("  input backend: " + capture.backend);
+        for (const d of devices) {
+          console.log("  " + d.name + (d.alternative ? "  (" + d.alternative + ")" : ""));
+        }
+        if (capture.backend === "avfoundation") {
+          console.log('  on macOS the left column is the index ffmpeg wants: device = "0"');
+        }
       } catch (err) {
         console.error("  " + (err as Error).message);
       }

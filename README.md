@@ -27,7 +27,7 @@ node src/cli.ts --character examples/example-character
 `ATTUNE_API_KEY` 可选。三个变量中前两个齐备才走 HTTP，否则回落离线。
 
 ```bash
-npm test          # 295 项测试（293 通过，2 项在非 Windows 上跳过）
+npm test          # 302 项测试（300 通过，2 项只在 Windows 上跑）
 npm run accept examples/example-character   # 十轮人设一致性验收，带语音
 npm run voice     # 跑一轮并把 wav、口型曲线、元数据写到 ./out/voice-demo
 npm run listen    # 倾听层三条机械验收，产物在 ./out/listen-accept
@@ -133,6 +133,22 @@ command = "whisper-cli -m models/ggml-base.bin -nt -f {audio}"
 所以 `npm run asr` **只报重叠度，不设及格线**。识别准确率是识别器的属性，不是接线的属性；「你的角色可以听错到什么程度」只有人能定。
 
 真想要好耳朵，接 whisper。这也是为什么留了 `http` 和 `cli` 两条路。
+
+### 麦克风在三个平台上怎么开
+
+采集走 ffmpeg，但三个系统给的输入插件不一样：
+
+| 系统 | ffmpeg 输入插件 | 设备名长什么样 | 怎么列出来 |
+|---|---|---|---|
+| Windows | `dshow` | `麦克风阵列 (Realtek(R) Audio)` | 让 ffmpeg 自己列 |
+| macOS | `avfoundation` | **数字索引** `0`、`2`（不是名字） | 让 ffmpeg 自己列 |
+| Linux | `pulse`（回落到 `alsa`） | `alsa_input.pci-...analog-stereo` 或 `hw:0,0` | `pactl list short sources` / `arecord -l` |
+
+插件按平台选，不靠探测——`defaultCaptureBackend()` 一行判断。选错了不会静默：ffmpeg 会回 `Unknown input format: 'pulse'`，那句话会原样出现在报错里。
+
+`/devices` 会先打印当前用的是哪个插件。macOS 上左列那个数字才是要填进 `device` 的值，所以脚本在末尾特意提醒一句——**拿标签当设备名是 macOS 上最常见的错**，而且它不会报「名字不对」，它会报「打不开」，很容易查错方向。
+
+Linux 上 ffmpeg 没有列举设备的能力，所以走 `pactl`；PulseAudio 没起来时回落 `arecord -l`。两个都没有就明说「装 pulseaudio-utils 或 alsa-utils，或者直接把设备名传进来」。`pactl` 里以 `.monitor` 结尾的是回环输出不是麦克风，会被跳过——录那个会在 `/talk` 里听见自己的音箱。
 
 ### 无麦克风也能验收
 
