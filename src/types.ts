@@ -39,6 +39,8 @@ export interface CharacterConfig {
   personaPath: string;
   memoryNamespace: string;
   voice: { engine: string; model: string; voice?: string; rate?: number };
+  /** How the character hears. Absent block means "none", i.e. text only. */
+  asr: { engine: string; model: string; language?: string; command?: string; timeoutMs?: number };
   renderer: { type: string; model: string };
   mapping: Record<string, string | number | boolean | Array<string | number>>;
   rootDir: string;

@@ -6,16 +6,25 @@ import { loadCharacter, ConfigError } from "./config.ts";
 import { Engine } from "./engine.ts";
 import { providerFromEnv } from "./provider.ts";
 import { SpeechError, speechFromConfig } from "./speech.ts";
+import { AsrError, canHear, type AsrProvider } from "./asr.ts";
+import { asrFromConfigWithSapi } from "./asr-sapi.ts";
+import { CaptureError, FfmpegCapture, WavFileCapture, type Capture } from "./audio/capture.ts";
 
 const USAGE = [
-  "attune - realtime voice conversation engine (M2: voice loop)",
+  "attune - realtime voice conversation engine (M3: ears, mouth, listening)",
   "",
-  "usage: node src/cli.ts --character <dir> [--state <dir>] [--text-only]",
+  "usage: node src/cli.ts --character <dir> [--state <dir>] [--text-only] [--say-file <wav>]",
   "",
   "  --character <dir>  directory holding character.toml (required)",
   "  --state <dir>      where transcripts are stored (default: ~/.attune)",
   "  --text-only        skip speech synthesis (M1 behaviour)",
+  "  --say-file <wav>   speak one turn from an existing wav, then exit",
   "  --help             show this message",
+  "",
+  "in the session:",
+  "  /talk              start recording; press enter again to stop and send",
+  "  /devices           list the microphones ffmpeg can see",
+  "  /quit, /exit       leave",
   "",
   "environment:",
   "  ATTUNE_BASE_URL     OpenAI-compatible chat endpoint, e.g. http://127.0.0.1:1234/v1",
@@ -24,24 +33,39 @@ const USAGE = [
   "  ATTUNE_TTS_BASE_URL OpenAI-compatible speech endpoint (voice.engine = \"http\")",
   "  ATTUNE_TTS_MODEL    model id for that speech endpoint",
   "  ATTUNE_TTS_API_KEY  optional bearer token for speech",
+  "  ATTUNE_ASR_BASE_URL OpenAI-compatible transcription endpoint (asr.engine = \"http\")",
+  "  ATTUNE_ASR_MODEL    model id for that transcription endpoint",
+  "  ATTUNE_ASR_API_KEY  optional bearer token for transcription",
+  "  ATTUNE_ASR_LANGUAGE BCP-47 hint, e.g. zh",
+  "  ATTUNE_ASR_COMMAND  command line for asr.engine = \"cli\"; must contain {audio}",
   "",
   "With no chat endpoint the engine runs offline: the loop works, the replies are",
   "obvious filler, nothing is downloaded. With no speech engine the audio is silent",
-  "but still correctly timed, so the mouth curve is real.",
+  "but still correctly timed, so the mouth curve is real. With no recogniser the",
+  "microphone is never opened - recording into an engine that cannot hear is theatre.",
 ].join("\n");
 
+interface Args {
+  character?: string;
+  state?: string;
+  "text-only"?: boolean;
+  "say-file"?: string;
+  help?: boolean;
+}
+
 async function main(): Promise<number> {
-  let args;
+  let args: Args;
   try {
     args = parseArgs({
       options: {
         character: { type: "string" },
         state: { type: "string" },
         "text-only": { type: "boolean" },
+        "say-file": { type: "string" },
         help: { type: "boolean", short: "h" },
       },
       allowPositionals: false,
-    }).values;
+    }).values as Args;
   } catch (err) {
     console.error((err as Error).message + "\n\n" + USAGE);
     return 2;
@@ -77,54 +101,197 @@ async function main(): Promise<number> {
     throw err;
   }
 
+  let asr;
+  try {
+    asr = asrFromConfigWithSapi(character.asr, process.env);
+  } catch (err) {
+    if (err instanceof AsrError) {
+      console.error("asr error: " + err.message);
+      return 1;
+    }
+    throw err;
+  }
+
   const voiceEnabled = !args["text-only"] && speech.id !== "silent";
   const engine = new Engine({ character, provider, speech, stateDir, voice: voiceEnabled });
+
+  const ears = canHear(asr);
 
   console.log("attune · " + character.name);
   console.log("provider: " + provider.id);
   console.log("voice:    " + speech.id + (voiceEnabled ? "" : " (not synthesized)"));
+  console.log("ears:     " + asr.id + (ears ? "" : " (not listening)"));
   console.log("state:    " + stateDir);
-  console.log("type /quit to exit.\n");
+
+  /** One turn, printed as it streams. Shared by typed text and recognised audio. */
+  const runTurn = async (text: string): Promise<void> => {
+    let printed = false;
+    for await (const event of engine.turn(text)) {
+      if (event.type === "delta") {
+        if (!printed) {
+          process.stdout.write(character.name + ": ");
+          printed = true;
+        }
+        process.stdout.write(event.text);
+      } else if (event.type === "speech") {
+        process.stdout.write(
+          "\n  [" + event.engine + " · " + Math.round(event.durationMs) + "ms · " +
+            event.audio.samples.length + " samples @ " + event.audio.sampleRate + "Hz]",
+        );
+      } else if (event.type === "mouth") {
+        const voiced = event.frames.filter((f) => f.open > 0.1).length;
+        process.stdout.write("\n  [mouth: " + event.frames.length + " frames, " + voiced + " voiced]");
+      } else if (event.type === "silent-turn") {
+        process.stdout.write("\n  [nothing to say aloud: " + event.reason + "]");
+      } else if (event.type === "gesture") {
+        const moved = event.gestures.map((g) => g.channel).join(", ");
+        process.stdout.write("\n  [reaction: " + moved + "]");
+      } else if (event.type === "reply") {
+        process.stdout.write("\n");
+      }
+    }
+  };
+
+  // Headless path: one wav in, one reply out. This is the way to exercise the
+  // whole ear-to-mouth loop on a machine with no microphone, and the way a script
+  // drives it.
+  if (args["say-file"]) {
+    const capture = new WavFileCapture(args["say-file"]);
+    let audio;
+    try {
+      await capture.start();
+      audio = await capture.stop();
+    } catch (err) {
+      if (err instanceof CaptureError) {
+        console.error("capture error: " + err.message);
+        return 1;
+      }
+      throw err;
+    }
+    let transcript;
+    try {
+      transcript = await asr.transcribe(audio);
+    } catch (err) {
+      if (err instanceof AsrError) {
+        console.error("asr error: " + err.message);
+        return 1;
+      }
+      throw err;
+    }
+    const heard = transcript.text.trim();
+    console.log(
+      "heard:    " + (heard ? JSON.stringify(heard) : "(nothing)") + "  [" + asr.id + " · " +
+        Math.round(audio.durationMs) + "ms audio" + (transcript.confidence !== undefined ? " · conf " + transcript.confidence.toFixed(2) : "") + "]",
+    );
+    if (!heard) {
+      console.error("nothing was recognised, so there is no turn to take");
+      return 1;
+    }
+    try {
+      await runTurn(heard);
+    } catch (err) {
+      console.error("error: " + (err as Error).message);
+      return 1;
+    }
+    return 0;
+  }
+
+  console.log("type /quit to exit." + (ears ? " /talk to speak." : "") + "\n");
 
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
-  const prompt = () => process.stdout.write("you: ");
+  const prompt = () => process.stdout.write(ears ? "you (or /talk): " : "you: ");
   prompt();
+
+  /** Recording is a two-step gesture because there is no keypress hook here. */
+  let recording: Capture | null = null;
 
   for await (const line of rl) {
     const text = line.trim();
+
+    if (recording) {
+      // An empty line is how you end a recording; anything else is treated the
+      // same way. Waiting for a specific word would invite typos to leave the
+      // microphone open.
+      const capture = recording;
+      recording = null;
+      let audio;
+      try {
+        audio = await capture.stop();
+      } catch (err) {
+        console.error("capture error: " + (err as Error).message);
+        prompt();
+        continue;
+      }
+      let heard = "";
+      try {
+        const transcript = await asr.transcribe(audio);
+        heard = transcript.text.trim();
+        console.log(
+          "  [" + asr.id + " heard " + (heard ? JSON.stringify(heard) : "nothing") +
+            " · " + Math.round(audio.durationMs) + "ms" +
+            (transcript.confidence !== undefined ? " · conf " + transcript.confidence.toFixed(2) : "") + "]",
+        );
+      } catch (err) {
+        console.error("asr error: " + (err as Error).message);
+        prompt();
+        continue;
+      }
+      if (!heard) {
+        console.log("  (nothing recognised; try again)");
+        prompt();
+        continue;
+      }
+      try {
+        await runTurn(heard);
+      } catch (err) {
+        console.error("error: " + (err as Error).message);
+      }
+      prompt();
+      continue;
+    }
+
     if (!text) continue;
     if (text === "/quit" || text === "/exit") break;
 
-    let printed = false;
-    try {
-      for await (const event of engine.turn(text)) {
-        if (event.type === "delta") {
-          if (!printed) {
-            process.stdout.write(character.name + ": ");
-            printed = true;
-          }
-          process.stdout.write(event.text);
-        } else if (event.type === "speech") {
-          process.stdout.write(
-            "\n  [" + event.engine + " · " + Math.round(event.durationMs) + "ms · " +
-              event.audio.samples.length + " samples @ " + event.audio.sampleRate + "Hz]",
-          );
-        } else if (event.type === "mouth") {
-          const voiced = event.frames.filter((f) => f.open > 0.1).length;
-          process.stdout.write("\n  [mouth: " + event.frames.length + " frames, " + voiced + " voiced]");
-        } else if (event.type === "silent-turn") {
-          process.stdout.write("\n  [nothing to say aloud: " + event.reason + "]");
-        } else if (event.type === "reply") {
-          process.stdout.write("\n");
-        }
+    if (text === "/devices") {
+      try {
+        const devices = await new FfmpegCapture().listDevices();
+        for (const d of devices) console.log("  " + d.name + (d.alternative ? "  (" + d.alternative + ")" : ""));
+      } catch (err) {
+        console.error("  " + (err as Error).message);
       }
+      prompt();
+      continue;
+    }
+
+    if (text === "/talk") {
+      if (!ears) {
+        console.log("  no recogniser is configured ([asr] engine = none)");
+        prompt();
+        continue;
+      }
+      const capture = new FfmpegCapture({ sampleRate: 16000 });
+      try {
+        await capture.start();
+      } catch (err) {
+        console.error("capture error: " + (err as Error).message);
+        prompt();
+        continue;
+      }
+      recording = capture;
+      console.log("  recording… press enter to stop.");
+      continue;
+    }
+
+    try {
+      await runTurn(text);
     } catch (err) {
-      if (printed) process.stdout.write("\n");
       console.error("error: " + (err as Error).message);
     }
     prompt();
   }
 
+  if (recording) await recording.abort().catch(() => {});
   rl.close();
   return 0;
 }

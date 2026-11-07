@@ -13,6 +13,7 @@
     "test": "node --test \"test/*.test.ts\"",
     "accept": "node scripts/accept.ts",
     "voice": "node scripts/voice-demo.ts",
-    "listen": "node scripts/listen-accept.ts"
+    "listen": "node scripts/listen-accept.ts",
+    "asr": "node scripts/asr-accept.ts"
   }
 }

@@ -13,6 +13,15 @@ memory_namespace = "xiaoman"
 engine = "none"
 model = "none"
 
+# Same discipline for the ear: "none" means the microphone is never opened.
+# On Windows, "sapi" is the recogniser that ships with the OS (mediocre but free):
+#   engine = "sapi"
+#   language = "zh-CN"
+# A whisper endpoint goes through "http" and ATTUNE_ASR_BASE_URL / ATTUNE_ASR_MODEL;
+# an installed whisper.cpp goes through "cli" with a command containing {audio}.
+[asr]
+engine = "none"
+
 [renderer]
 type = "none"
 model = "none"

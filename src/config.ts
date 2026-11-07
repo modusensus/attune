@@ -83,6 +83,7 @@ export async function loadCharacter(dir: string): Promise<CharacterConfig> {
   const root = parseToml(text);
   const identity = table(root, "identity", true);
   const voice = table(root, "voice", false);
+  const asr = table(root, "asr", false);
   const renderer = table(root, "renderer", false);
   const mapping = table(root, "mapping", false);
 
@@ -101,6 +102,13 @@ export async function loadCharacter(dir: string): Promise<CharacterConfig> {
       model: str(voice, "model", "voice", "none"),
       voice: optStr(voice, "voice", "voice"),
       rate: optInt(voice, "rate", "voice"),
+    },
+    asr: {
+      engine: str(asr, "engine", "asr", "none"),
+      model: str(asr, "model", "asr", "none"),
+      language: optStr(asr, "language", "asr"),
+      command: optStr(asr, "command", "asr"),
+      timeoutMs: optInt(asr, "timeout_ms", "asr"),
     },
     renderer: {
       type: str(renderer, "type", "renderer", "none"),
