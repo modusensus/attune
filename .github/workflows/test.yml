@@ -1,0 +1,31 @@
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: 测试
+        run: node --test "test/*.test.ts"
+      - name: 倾听层验收
+        run: npm run listen
+      - name: 端到端验收（无模型端点，预期 exit 3）
+        continue-on-error: true
+        run: node scripts/accept.ts examples/example-character --out out/accept-ci
