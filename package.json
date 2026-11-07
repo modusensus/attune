@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Realtime voice conversation engine for replaceable characters. It learns how to listen.",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "engines": {
     "node": ">=24"
   },

@@ -22,7 +22,7 @@
  *   node scripts/live2d-accept.ts --character <dir>
  *
  * The model lives outside this repository on purpose: the sample this backend
- * was written against is CC BY-NC-SA, and a MIT repository cannot carry it.
+ * was written against is CC BY-NC-SA, and a MPL-2.0 repository cannot carry it.
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
