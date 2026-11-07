@@ -1,0 +1,35 @@
+name: 一个想法
+description: 新的倾听判据、渲染后端、识别器接法，或者别的什么
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这个项目最缺的不是功能，是**判断**：什么时候该点头、什么时候该闭嘴、什么时候该把话头交回去。
+        所以最有用的想法长这样——「在 X 情况下它现在是 Y，应该 Y'，判据是 Z」。
+  - type: textarea
+    id: idea
+    attributes:
+      label: 想法
+      description: 现在是怎么做的，你认为哪里不对，想改成什么。
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: 怎么知道它成了
+      description: 一条能机械检查的判据，或者一个「人看了会同意」的具体场景。说不出来的话，先讨论再动手也完全可以。
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 属于哪一层
+      options:
+        - 倾听判据（本项目存在的理由）
+        - 渲染后端（2D / 3D / 别的）
+        - 识别与合成（换掉现有的接法）
+        - 页面与宿主（把姿态画出来）
+        - 文档与验收
+    validations:
+      required: true

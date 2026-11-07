@@ -1,0 +1,47 @@
+name: 一个问题
+description: 跑不通、结果不对、文档和代码不一致
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢你来报。为了少来回几轮，下面几项能填就填——尤其是**实际输出**，它比描述有用得多。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 你做了什么、期望什么、实际得到什么。贴原样的终端输出，不要转述。
+      placeholder: |
+        $ node src/cli.ts --character examples/example-character
+        期望：…
+        实际：…
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 大概在哪一段
+      options:
+        - 不确定
+        - 配置与角色目录（character.toml）
+        - 对话与记忆（engine / memory / provider）
+        - 语音合成与口型（speech / envelope）
+        - 采集与识别（capture / asr）
+        - 倾听层（listen）
+        - 渲染姿态（render / VRM / Live2D）
+        - 文档
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: 系统、`node -v`、用的是哪个模型端点（不用写 key）。
+      placeholder: Windows 11 / node v24.15.0 / ATTUNE_BASE_URL=http://127.0.0.1:1234/v1
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: `npm test` 的结果
+      description: 如果测试有红的，把那几条的标题贴上来。全绿也请说一声，那说明这个 bug 没有测试覆盖——比修它更值得先补。

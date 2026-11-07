@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 先看看它现在到哪一步了
+    url: https://github.com/modusensus/attune#现在到哪一步
+    about: 里程碑、出口标准，以及「还没做」的那几项，进展都写在这里。
