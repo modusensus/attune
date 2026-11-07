@@ -22,6 +22,13 @@ model = "none"
 [asr]
 engine = "none"
 
+# The picture. "none" writes nothing and is the default so a clone draws no
+# blank canvas; "vrm" reads a .vrm file next to this one.
+#   type  = "vrm"
+#   model = "model.vrm"
+# Unknown types are refused by name rather than falling back to none, because a
+# typo here shows up as "the character is invisible", which is the worst possible
+# way to find out.
 [renderer]
 type = "none"
 model = "none"

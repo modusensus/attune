@@ -9,6 +9,9 @@ import { SpeechError, speechFromConfig } from "./speech.ts";
 import { AsrError, canHear, type AsrProvider } from "./asr.ts";
 import { asrFromConfigWithSapi } from "./asr-sapi.ts";
 import { CaptureError, FfmpegCapture, WavFileCapture, type Capture } from "./audio/capture.ts";
+import { RendererError } from "./render/backend.ts";
+import { rendererFromConfig } from "./render/load.ts";
+import { Stage } from "./render/stage.ts";
 
 const USAGE = [
   "attune - realtime voice conversation engine (M3: ears, mouth, listening)",
@@ -112,8 +115,23 @@ async function main(): Promise<number> {
     throw err;
   }
 
+  let renderer;
+  try {
+    renderer = await rendererFromConfig(character);
+  } catch (err) {
+    if (err instanceof RendererError) {
+      console.error("renderer error: " + err.message);
+      return 1;
+    }
+    throw err;
+  }
+
   const voiceEnabled = !args["text-only"] && speech.id !== "silent";
-  const engine = new Engine({ character, provider, speech, stateDir, voice: voiceEnabled });
+  // The stage owns the clock. It is created even for "none" so that the mouth
+  // curve is still sampled and can be printed — a backend with no rig is not a
+  // reason to lose sight of what the character is doing.
+  const stage = new Stage(renderer.backend);
+  const engine = new Engine({ character, provider, speech, stateDir, voice: voiceEnabled, stage });
 
   const ears = canHear(asr);
 
@@ -121,6 +139,10 @@ async function main(): Promise<number> {
   console.log("provider: " + provider.id);
   console.log("voice:    " + speech.id + (voiceEnabled ? "" : " (not synthesized)"));
   console.log("ears:     " + asr.id + (ears ? "" : " (not listening)"));
+  console.log(
+    "renderer: " + renderer.backend.id +
+      (renderer.rig ? "  (" + renderer.rig.rig.spec + ", " + Object.keys(renderer.rig.rig.bones).length + " bones)" : ""),
+  );
   console.log("state:    " + stateDir);
 
   /** One turn, printed as it streams. Shared by typed text and recognised audio. */

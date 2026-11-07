@@ -135,3 +135,52 @@ test("--say-file with a real recogniser takes the recognised turn", { skip: proc
   assert.match(r.stdout, /heard: +".+"/, "the wav must be recognised, got: " + r.stdout);
   assert.match(r.stdout, /小满: /);
 });
+test("the renderer in character.toml is built at startup and reported", async () => {
+  const r = await runCli(
+    ["--character", join(ROOT, "examples", "example-character")],
+    "/quit" + NL,
+    { ATTUNE_BASE_URL: "", ATTUNE_MODEL: "" },
+  );
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /renderer: none/);
+});
+
+test("a renderer that cannot be built stops the session before it starts", async () => {
+  // A character that says live2d but has no backend is a configuration mistake,
+  // and the worst possible place to discover it is three turns in when nobody
+  // can see the character.
+  const dir = join(ROOT, "out", "_cli-renderer");
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "persona.md"), "你在旧书店上夜班。", "utf8");
+  await writeFile(
+    join(dir, "character.toml"),
+    ["[identity]", 'name = "小满"', 'persona = "persona.md"', "", "[renderer]", 'type = "live2d"'].join(NL),
+  );
+  const r = await runCli(["--character", dir], "", { ATTUNE_BASE_URL: "", ATTUNE_MODEL: "" });
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /renderer error: .*live2d.*not implemented yet/);
+});
+
+test("a vrm character loads its model before the first turn", async () => {
+  // A model built in memory rather than a 10MB sample: the CLI path under test
+  // is "read [renderer], load the file, report what came back", and a fixture
+  // with one head bone proves all three.
+  const dir = join(ROOT, "out", "_cli-vrm-character");
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  const { buildGlb, vrm10 } = await import("./fixtures/vrm-build.ts");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "persona.md"), "你在旧书店上夜班。", "utf8");
+  await writeFile(join(dir, "model.vrm"), buildGlb({ json: vrm10({ eyes: true }) }));
+  await writeFile(
+    join(dir, "character.toml"),
+    ["[identity]", 'name = "小满"', 'persona = "persona.md"', "", "[renderer]", 'type = "vrm"', 'model = "model.vrm"'].join(NL),
+  );
+
+  const r = await runCli(["--character", dir, "--text-only"], "/quit" + NL, {
+    ATTUNE_BASE_URL: "",
+    ATTUNE_MODEL: "",
+  });
+  assert.equal(r.code, 0, "stderr: " + r.stderr);
+  assert.match(r.stdout, /renderer: vrm {2}\(1\.0, \d+ bones\)/);
+});

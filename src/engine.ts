@@ -5,6 +5,7 @@ import { isSpeakable, speakableText } from "./audio/script.ts";
 import type { Provider } from "./provider.ts";
 import { SilentSpeech, type SpeechProvider } from "./speech.ts";
 import type { ListenSession } from "./listen/session.ts";
+import type { Stage } from "./render/stage.ts";
 import { readMapping, type RenderMapping } from "./render/mapping.ts";
 import type { CharacterConfig, EngineEvent, Turn } from "./types.ts";
 
@@ -26,6 +27,13 @@ export interface EngineOptions {
    * floor.
    */
   listen?: ListenSession;
+  /**
+   * The drawing surface, when there is one. The engine does not render; it just
+   * hands its state and the mouth curve it produced to whatever is holding the
+   * clock. Everything above the renderer seam stays identical here, which is
+   * what "one config, 2D or 3D" is supposed to mean.
+   */
+  stage?: Stage;
 }
 
 /**
@@ -45,6 +53,7 @@ export class Engine {
   private readonly envelope: EnvelopeOptions;
   private readonly voiceEnabled: boolean;
   private readonly listen: ListenSession | null;
+  private readonly stage: Stage | null;
   private persona: string | null;
   /** Validated once, here: a typo in [mapping] must fail at startup, not turn 3. */
   readonly mapping: RenderMapping;
@@ -58,6 +67,7 @@ export class Engine {
     this.envelope = options.envelope ?? {};
     this.voiceEnabled = options.voice ?? true;
     this.listen = options.listen ?? null;
+    this.stage = options.stage ?? null;
     this.persona = options.persona ?? null;
     this.mapping = readMapping(options.character.mapping);
   }
@@ -119,7 +129,11 @@ export class Engine {
         durationMs: clip.audio.durationMs,
         audio: clip.audio,
       };
-      yield { type: "mouth", frames: mouthFrames(clip.audio, this.envelope) };
+      const frames = mouthFrames(clip.audio, this.envelope);
+      // The stage keeps the curve: it owns the clock, so the mouth has to still
+      // be readable after this generator is done with it.
+      this.stage?.setMouth(frames);
+      yield { type: "mouth", frames };
     } else if (this.voiceEnabled) {
       // Nothing pronounceable — the character shrugged. Say so instead of
       // synthesizing a pause nobody asked for.
@@ -133,5 +147,6 @@ export class Engine {
 
   private setState(state: "listening" | "thinking" | "speaking"): void {
     this.listen?.setState(state);
+    this.stage?.setState(state);
   }
 }

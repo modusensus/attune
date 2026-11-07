@@ -4,7 +4,7 @@
 
 attune 是一个可替换角色的实时语音对话引擎。角色是一份配置，不是一段代码；引擎里没有角色。
 
-当前状态：**M3 听觉链路已可运行**。有人设卡、有记忆、有流式输出、有可替换的模型端点；有 TTS，有口型曲线；有麦克风输入和语音识别；有倾听层的判断与手势映射。没有画面。
+当前状态：**M4 3D 后端已可驱动**。有人设卡、有记忆、有流式输出、有可替换的模型端点；有 TTS，有口型曲线；有麦克风输入和语音识别；有倾听层的判断与手势映射；手势和口型能落到 VRM 骨骼与表情上。**还没有渲染器**——引擎算的是"这一帧该摆成什么样"，画由外面的 three.js 之类去画。
 
 ## 跑起来
 
@@ -27,11 +27,12 @@ node src/cli.ts --character examples/example-character
 `ATTUNE_API_KEY` 可选。三个变量中前两个齐备才走 HTTP，否则回落离线。
 
 ```bash
-npm test          # 178 项测试（176 通过，2 项在非 Windows 上跳过）
+npm test          # 273 项测试（271 通过，2 项在非 Windows 上跳过）
 npm run accept examples/example-character   # 十轮人设一致性验收，带语音
 npm run voice     # 跑一轮并把 wav、口型曲线、元数据写到 ./out/voice-demo
 npm run listen    # 倾听层三条机械验收，产物在 ./out/listen-accept
 npm run asr -- --character <dir>            # 识别链路验收，产物在 ./out/asr-accept
+npm run vrm -- --model <file.vrm>           # 3D 驱动验收，产物在 ./out/vrm-accept
 ```
 
 ## 听见声音
@@ -167,6 +168,44 @@ npm run listen
 
 **这三条是必要不充分。** 脚本能证明它没有在错误的时刻动，不能证明像不像在听——那个得你自己坐着对它说一会儿话。
 
+## 3D 不靠装包
+
+`src/render/vrm/` 自己解析 GLB/VRM，不 import three.js。
+
+不是造轮子有瘾，是这条约束逼出来的：**clone 下来不装任何东西就得能跑**。three.js 的 VRM loader 要 npm install，装完还要一个 WebGL 上下文才能算骨架——那就没法在终端里、在 CI 里、在没有 GPU 的机器上验证「这个手势到底有没有让头动起来」。现在它是纯函数：给毫秒数，回一组骨骼四元数和表情权重，测试断言得出来。
+
+支持 VRM 1.0 与 0.x 两个版本（骨骼命名、表情表、拇指三段名都不一样，解析器翻译成同一套 52 个规范名）。
+
+**硬的地方是世界空间，不是读文件。** VRM 1.0 的头部骨骼局部旋转经常是 180°（模型是倒着建的，靠父子链把它翻正）。这时往局部 X 轴加 12° 点头，转出来是世界 -X，表现在脸上就是**歪脖子**而不是低头。所以增量必须在世界空间合成：
+
+```
+localNew = parentWorld⁻¹ · worldDelta · parentWorld · localRest
+```
+
+这条有测试钉着：把一个模型的头骨设成半转，再点一次头，反解出的增量必须还是绕世界 X 轴的 12.00°，侧倾泄漏小于 1e-6。
+
+**没有的表情就说没有。** VRM 标准里压根没有「抬眉」这个预设，两个真实样本模型也都没自带。`brow_raise` 会被丢进 `dropped` 并写明理由，而不是偷偷用 `surprised` 顶上——后者同时睁大眼、常常张嘴，在 hold 的 0.3 强度下看起来像每四秒被吓一次。角色面无表情是合法状态，编一个动作出来才是屏保。
+
+```bash
+npm run vrm -- --model out/vrm-probe/VRM1_Constraint_Twist_Sample.vrm
+```
+
+```
+  spec:     VRM 1.0
+  bones:    52 humanoid
+  channels this rig cannot express: brow_raise
+    brow_raise: no eyebrow expression
+
+  PASS  none and vrm see the same channels  —  157 frames agreed
+  PASS  the nod is a nod, not a shudder  —  peak 7.20 degrees
+  PASS  the head comes back to rest  —  0.000 degrees at the end
+  PASS  the mouth opens while speaking  —  peak aa 0.88
+```
+
+「none 和 vrm 看到同一串通道」这一条是 M4 的全部主张：**同一份配置，换 `[renderer] type` 就该换画法，不用改别的地方**。脚本验的是数值，像不像人得打开 `frames.json` 自己看。
+
+口型进 3D 走两条路：`aa` 表情权重直接吃包络值；有下颌骨的模型再额外转 `JAW_DEGREES × mouth`。**这不是 lip sync，是包络能诚实声称的东西**——真要按音素做口型，得先有音素时间轴，那是另一件事。
+
 ## 一个角色长什么样
 
 ```
@@ -189,8 +228,8 @@ model = "none"
 engine = "none"        # 见上文「耳朵也有三种接法」
 
 [renderer]
-type = "none"          # M4 才用
-model = "none"
+type = "none"          # none / vrm；live2d 还没实现，写它会当场报错
+model = "none"         # type = "vrm" 时指向一个 .vrm 文件
 
 [mapping]
 backchannel_nod = 0.6   # 附和的点头幅度，0..1；0 表示关了
@@ -214,7 +253,7 @@ turn_take_brow = 0.5     # 接话时的抬眉
 | M2 | 语音闭环：TTS + 口型 | 完成 |
 | M2.5 | 听觉：麦克风 + 可替换识别器 | 完成 |
 | M3 | 倾听层：音频帧 + 判断 + 三态机 + 参数映射 | 完成（MaAI 未接） |
-| M4 | 3D：VRM 后端 | 未开始 |
+| M4 | 3D：VRM 后端（解析 + 骨骼/表情驱动） | 完成（渲染器未接） |
 
 M1 的出口标准是「能连续对话 10 轮不掉人设」。机械那一半由 `npm run accept` 检查（无漂移词、无原样复述、无重复、长度可朗读），另一半靠人读 transcript——脚本不会替你宣布人设还在。
 
@@ -225,6 +264,8 @@ M2.5 的出口标准是「说一句话，角色听见并按它回答」。`npm r
 **流式识别没做，也没打算现在做。** `AsrProvider` 是整句接口。流式的形状（带修正的假设流）是另一套契约，而引擎的输入本来就是「一轮说完的话」——现在编一个没人兑现的流式接口，等于先承诺。
 
 **不用 VAD 切句，用 push-to-talk。** 决定「一句话说完了」正是本项目用自己的音高判断在做的事，不该在还没听到音高之前先交给 VAD 判掉。
+
+**M4 只算姿态，不画。** 引擎输出的是「这一帧头转多少度、嘴张多大、用哪个表情」，坐标系里还没有相机、材质、光照。要看见画面，得有个宿主页面拿 three.js 把这些数贴到骨骼上——那是下一步，不是借口。另外**没有渲染器的加载器**：`backendFor` 认的是我们解出来的 rig 结构，不是 three.js 的 VRM 对象，宿主那边得自己把两边对上。
 
 **倾听层现在用的是自写判断，不是 MaAI。** 音高走向 + 出声段长度这套规则守住了 `CueTracker` 的接口，MaAI 接进来时替换的是同一个对象，下游一行不用改——但**它还没接**，所以别把「接口兼容」当成「已经可用」。
 

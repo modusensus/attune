@@ -8,6 +8,9 @@ import { MemoryStore } from "../src/memory.ts";
 import type { CharacterConfig, EngineEvent, Message } from "../src/types.ts";
 import type { Provider } from "../src/provider.ts";
 import { SilentSpeech, type SpeechClip, type SpeechProvider } from "../src/speech.ts";
+import { Stage } from "../src/render/stage.ts";
+import { NullBackend } from "../src/render/backend.ts";
+import type { MouthFrame } from "../src/audio/envelope.ts";
 
 /** A provider that records what it was asked and replays scripted deltas. */
 class ScriptedProvider implements Provider {
@@ -291,5 +294,77 @@ test("a reply that is only a stage direction is not spoken at all", async () => 
     assert.equal((events.find((e) => e.type === "reply") as { text: string }).text, "（沉默）");
   } finally {
     await s.cleanup();
+  }
+});
+test("a stage is told the state of the turn without the engine knowing what draws it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "attune-stage-"));
+  try {
+    const personaPath = join(dir, "persona.md");
+    await writeFile(personaPath, "你是小满。", "utf8");
+    const character: CharacterConfig = {
+      name: "小满",
+      personaPath,
+      memoryNamespace: "example",
+      voice: { engine: "none", model: "none" },
+      renderer: { type: "none", model: "none" },
+      mapping: {},
+      rootDir: dir,
+    };
+    const stage = new Stage(new NullBackend());
+    const seen: string[] = [];
+    const original = stage.setState.bind(stage);
+    stage.setState = (state) => {
+      seen.push(state);
+      original(state);
+    };
+    const engine = new Engine({
+      character,
+      provider: new ScriptedProvider(["今晚", "没人。"]),
+      stateDir: dir,
+      voice: false,
+      stage,
+    });
+    await collect(engine.turn("今晚有人来吗"));
+    assert.deepEqual(seen, ["listening", "thinking", "speaking", "listening"]);
+    assert.equal(stage.currentState, "listening", "the stage is idle again when the turn ends");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the mouth curve outlives the generator that produced it", async () => {
+  // The engine is finished after a turn; a renderer keeps drawing sixty times a
+  // second. If the curve only lived in the event, the mouth would be shut one
+  // frame later - the character would go silent mid-sentence.
+  const dir = await mkdtemp(join(tmpdir(), "attune-stage-"));
+  try {
+    const personaPath = join(dir, "persona.md");
+    await writeFile(personaPath, "你是小满。", "utf8");
+    const character: CharacterConfig = {
+      name: "小满",
+      personaPath,
+      memoryNamespace: "example",
+      voice: { engine: "none", model: "none" },
+      renderer: { type: "none", model: "none" },
+      mapping: {},
+      rootDir: dir,
+    };
+    const stage = new Stage(new NullBackend());
+    const engine = new Engine({
+      character,
+      provider: new ScriptedProvider(["好的。"]),
+      speech: new SilentSpeech(),
+      stateDir: dir,
+      stage,
+    });
+    const events = await collect(engine.turn("今晚有人来吗"));
+    const mouth = events.find((e) => e.type === "mouth") as { frames: MouthFrame[] } | undefined;
+    assert.ok(mouth, "the turn still announces the curve");
+    assert.ok(mouth.frames.length > 0);
+    for (const f of mouth.frames) {
+      assert.equal(stage.mouthAt(f.at), f.open, "the stage holds exactly the curve that was emitted");
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
