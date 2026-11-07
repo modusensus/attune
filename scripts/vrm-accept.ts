@@ -149,7 +149,7 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  const rig = loaded.rig?.rig ?? null;
+  const rig = loaded.rig?.kind === "vrm" ? loaded.rig.rig : null;
   const report = rig ? describeRig(rig) : ["(no model: the none backend has no rig to describe)"];
   push("a renderer was built", loaded.backend.id === (rig ? "vrm" : "none"), "backend: " + loaded.backend.id);
   if (rig) {
@@ -225,7 +225,7 @@ async function main(): Promise<number> {
     at: new Date().toISOString(),
     character: character.name,
     backend: loaded.backend.id,
-    model: loaded.rig?.path ?? null,
+    model: loaded.modelPath,
     rig: report,
     unsupportedChannels: unsupported,
     frames: sampled.length,
@@ -238,7 +238,7 @@ async function main(): Promise<number> {
     console.log(JSON.stringify(summary, null, 2));
   } else {
     console.log("attune · " + character.name);
-    console.log("renderer: " + loaded.backend.id + (loaded.rig ? "  (" + loaded.rig.path + ")" : ""));
+    console.log("renderer: " + loaded.backend.id + (loaded.modelPath ? "  (" + loaded.modelPath + ")" : ""));
     console.log("");
     for (const line of report) console.log("  " + line);
     const dropped = Object.keys(unsupported);

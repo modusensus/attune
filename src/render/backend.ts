@@ -40,6 +40,15 @@ export interface PoseFrame {
   bones: Record<string, { x: number; y: number; z: number; w: number }>;
   /** Expression name -> weight, 0..1. Already filtered to what the model has. */
   expressions: Record<string, number>;
+  /** Cubism parameter id -> value. Empty for rigs that are not Live2D. */
+  parameters: Record<string, number>;
+  /**
+   * True when these parameters were written without knowing the model's
+   * parameter list - a Cubism model with no DisplayInfo. The values may be
+   * perfect or may go nowhere; nothing here can tell, and a frame that pretends
+   * to be verified is worse than one that admits it is guessed.
+   */
+  parametersAssumed: boolean;
   /**
    * Channels this rig could not express, with the reason. Reported rather than
    * silently swallowed: "the eyebrows never move" should be visible in a log,
@@ -75,6 +84,8 @@ export class NullBackend implements RendererBackend {
       channels: channelsAt(input.gestures, input.at),
       bones: {},
       expressions: {},
+      parameters: {},
+      parametersAssumed: false,
       dropped: [],
     };
   }

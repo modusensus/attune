@@ -15,6 +15,7 @@
     "voice": "node scripts/voice-demo.ts",
     "listen": "node scripts/listen-accept.ts",
     "asr": "node scripts/asr-accept.ts",
-    "vrm": "node scripts/vrm-accept.ts"
+    "vrm": "node scripts/vrm-accept.ts",
+    "live2d": "node scripts/live2d-accept.ts"
   }
 }

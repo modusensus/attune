@@ -159,6 +159,8 @@ export class VrmBackend implements RendererBackend {
       channels,
       bones,
       expressions,
+      parameters: {},
+      parametersAssumed: false,
       dropped: dedupe(dropped),
     };
   }

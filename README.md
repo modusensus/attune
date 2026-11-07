@@ -4,7 +4,7 @@
 
 attune 是一个可替换角色的实时语音对话引擎。角色是一份配置，不是一段代码；引擎里没有角色。
 
-当前状态：**M4 3D 后端已可驱动**。有人设卡、有记忆、有流式输出、有可替换的模型端点；有 TTS，有口型曲线；有麦克风输入和语音识别；有倾听层的判断与手势映射；手势和口型能落到 VRM 骨骼与表情上。**还没有渲染器**——引擎算的是"这一帧该摆成什么样"，画由外面的 three.js 之类去画。
+当前状态：**M5 两种后端都能驱动**。有人设卡、有记忆、有流式输出、有可替换的模型端点；有 TTS，有口型曲线；有麦克风输入和语音识别；有倾听层的判断与手势映射。同一份手势与口型，可以落到 3D 的 VRM 骨骼上，也可以落到 2D 的 Live2D 参数上——换的是 `[renderer] type` 一行。**还没有渲染器**——引擎算的是"这一帧该摆成什么样"，画由外面的 three.js 或 pixi-live2d-display 去画。
 
 ## 跑起来
 
@@ -27,12 +27,13 @@ node src/cli.ts --character examples/example-character
 `ATTUNE_API_KEY` 可选。三个变量中前两个齐备才走 HTTP，否则回落离线。
 
 ```bash
-npm test          # 273 项测试（271 通过，2 项在非 Windows 上跳过）
+npm test          # 295 项测试（293 通过，2 项在非 Windows 上跳过）
 npm run accept examples/example-character   # 十轮人设一致性验收，带语音
 npm run voice     # 跑一轮并把 wav、口型曲线、元数据写到 ./out/voice-demo
 npm run listen    # 倾听层三条机械验收，产物在 ./out/listen-accept
 npm run asr -- --character <dir>            # 识别链路验收，产物在 ./out/asr-accept
 npm run vrm -- --model <file.vrm>           # 3D 驱动验收，产物在 ./out/vrm-accept
+npm run live2d -- --model <file.model3.json>  # Live2D 驱动验收，产物在 ./out/live2d-accept
 ```
 
 ## 听见声音
@@ -206,6 +207,42 @@ npm run vrm -- --model out/vrm-probe/VRM1_Constraint_Twist_Sample.vrm
 
 口型进 3D 走两条路：`aa` 表情权重直接吃包络值；有下颌骨的模型再额外转 `JAW_DEGREES × mouth`。**这不是 lip sync，是包络能诚实声称的东西**——真要按音素做口型，得先有音素时间轴，那是另一件事。
 
+## 2D 也不靠装包
+
+`src/render/live2d/` 自己解析 `model3.json` 与 `cdi3.json`，不 import Cubism SDK，也不碰 `pixi-live2d-display`。
+
+同一个理由：验证要能在终端里跑。`moc3` 是二进制专有格式，这里**只校验 4 字节 magic 和文件长度，不解析**——解析它等于让下游全部依赖我对格式的读法。真正上屏那一步必须由宿主加载 `live2dcubismcore`，这是 Live2D 的许可要求，我们绕不过去，也不假装绕过去了。
+
+**驱动哪些参数，是这一层最重要的一条纪律。** 鲸鱼娘的 `cdi3` 里有 247 个参数，绝大部分是道具开关（换发型、拿手机、鲸鱼、墨镜、蛋包饭）和 `j1`–`j57` 这种编号参数。后端只写 9 个：`ParamAngleY/Z`、`ParamEyeBallX/Y`、`ParamBrowLY/RY`、`ParamEyeLOpen/ROpen`、`ParamMouthOpenY`。验收脚本拿白名单卡死，写出第 10 个参数就是失败。**编道具动效＝发明模型不会的表情。**
+
+**「不写」和「写 0」不是一回事。** 这一条是先写错、被测试逮到才学会的：idle 帧里 `nod = 0`，实现照样写 `ParamAngleY = -0`，等于每帧把头角度按回基准，模型自带的 idle 头部小动作全被取消；眨眼同理，写 `ParamEyeLOpen = 1` 会把模型自己的眨眼动作一起关掉。现在只有 `blink > 0` 才写眼开度，只有 `nod > 0` 才写头角度，其余帧一个字段都不产出。
+
+```bash
+npm run live2d -- --model /path/to/c_0120.model3.json
+```
+
+```
+  moc3:      ...c_0120.moc3  (2119552 bytes)
+  textures:  2 file(s)
+  params:    247 declared
+  lipsync:  (group declared empty; falling back to ParamMouthOpenY)
+
+  PASS  none and live2d see the same channels  —  157 frames agreed
+  PASS  the head moves during the nod  —  peak ParamAngleY 7.20 degrees
+  PASS  the nod is a nod, not a shudder  —  peak 7.20 degrees
+  PASS  the head comes back to rest  —  0.000 degrees at the end
+  PASS  a blink closes the eyes  —  lowest eye openness 0.00
+  PASS  the eyes are left alone when nothing is blinking  —  no idle frame writes eye openness
+  PASS  the mouth opens while speaking  —  peak ParamMouthOpenY 0.88 (fell back: the model declares an empty LipSync group)
+  PASS  only conversation parameters are written  —  9 parameter(s), all allowed
+```
+
+`none` 和 `live2d` 看到同一串通道、`none` 和 `vrm` 也看到同一串通道——**同一份 `[mapping]`，换后端不该换动作。** M5 的全部主张就在这条，其余检查只是防止数值离谱。
+
+### 鲸鱼娘那套模型不在仓库里
+
+仓库里 vrm/live2d 只放代码。上面演示用的开源鲸鱼娘 Live2D（上善无形 / ZipZipPipe / 氵六青 三位作者，`assets/model/**` 为 CC BY-NC-SA 4.0 非商业）只存在于本机用户目录。**attune 是 MIT，NC 素材进来就是许可冲突**，所以验收脚本的注释里也写了一遍：模型路径由 `--model` 传，仓库一个字节都不存。
+
 ## 一个角色长什么样
 
 ```
@@ -228,8 +265,8 @@ model = "none"
 engine = "none"        # 见上文「耳朵也有三种接法」
 
 [renderer]
-type = "none"          # none / vrm；live2d 还没实现，写它会当场报错
-model = "none"         # type = "vrm" 时指向一个 .vrm 文件
+type = "none"          # none / vrm / live2d
+model = "none"         # type = "vrm" 指向 .vrm；type = "live2d" 指向 .model3.json
 
 [mapping]
 backchannel_nod = 0.6   # 附和的点头幅度，0..1；0 表示关了
@@ -254,6 +291,7 @@ turn_take_brow = 0.5     # 接话时的抬眉
 | M2.5 | 听觉：麦克风 + 可替换识别器 | 完成 |
 | M3 | 倾听层：音频帧 + 判断 + 三态机 + 参数映射 | 完成（MaAI 未接） |
 | M4 | 3D：VRM 后端（解析 + 骨骼/表情驱动） | 完成（渲染器未接） |
+| M5 | 2D：Live2D 后端（model3 解析 + 参数驱动） | 完成（渲染器未接） |
 
 M1 的出口标准是「能连续对话 10 轮不掉人设」。机械那一半由 `npm run accept` 检查（无漂移词、无原样复述、无重复、长度可朗读），另一半靠人读 transcript——脚本不会替你宣布人设还在。
 
@@ -265,7 +303,7 @@ M2.5 的出口标准是「说一句话，角色听见并按它回答」。`npm r
 
 **不用 VAD 切句，用 push-to-talk。** 决定「一句话说完了」正是本项目用自己的音高判断在做的事，不该在还没听到音高之前先交给 VAD 判掉。
 
-**M4 只算姿态，不画。** 引擎输出的是「这一帧头转多少度、嘴张多大、用哪个表情」，坐标系里还没有相机、材质、光照。要看见画面，得有个宿主页面拿 three.js 把这些数贴到骨骼上——那是下一步，不是借口。另外**没有渲染器的加载器**：`backendFor` 认的是我们解出来的 rig 结构，不是 three.js 的 VRM 对象，宿主那边得自己把两边对上。
+**M4 / M5 只算姿态，不画。** 引擎输出的是「这一帧头转多少度、嘴张多大、用哪个表情」，坐标系里还没有相机、材质、光照。要看见画面，得有个宿主页面拿 three.js 把骨骼贴上去，或者拿 pixi-live2d-display 把参数灌进去——那是下一步，不是借口。另外**没有渲染器的加载器**：`backendFor` 认的是我们自己解出来的 rig 结构，不是 three.js 的 VRM 对象，也不是 Cubism 的 model 对象，宿主那边得自己把两边对上。
 
 **倾听层现在用的是自写判断，不是 MaAI。** 音高走向 + 出声段长度这套规则守住了 `CueTracker` 的接口，MaAI 接进来时替换的是同一个对象，下游一行不用改——但**它还没接**，所以别把「接口兼容」当成「已经可用」。
 

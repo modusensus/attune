@@ -10,7 +10,7 @@ import { AsrError, canHear, type AsrProvider } from "./asr.ts";
 import { asrFromConfigWithSapi } from "./asr-sapi.ts";
 import { CaptureError, FfmpegCapture, WavFileCapture, type Capture } from "./audio/capture.ts";
 import { RendererError } from "./render/backend.ts";
-import { rendererFromConfig } from "./render/load.ts";
+import { describeLoadedRenderer, rendererFromConfig } from "./render/load.ts";
 import { Stage } from "./render/stage.ts";
 
 const USAGE = [
@@ -139,10 +139,8 @@ async function main(): Promise<number> {
   console.log("provider: " + provider.id);
   console.log("voice:    " + speech.id + (voiceEnabled ? "" : " (not synthesized)"));
   console.log("ears:     " + asr.id + (ears ? "" : " (not listening)"));
-  console.log(
-    "renderer: " + renderer.backend.id +
-      (renderer.rig ? "  (" + renderer.rig.rig.spec + ", " + Object.keys(renderer.rig.rig.bones).length + " bones)" : ""),
-  );
+  const rigNote = describeLoadedRenderer(renderer);
+  console.log("renderer: " + renderer.backend.id + (rigNote ? "  (" + rigNote + ")" : ""));
   console.log("state:    " + stateDir);
 
   /** One turn, printed as it streams. Shared by typed text and recognised audio. */

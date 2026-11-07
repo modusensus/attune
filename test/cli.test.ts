@@ -146,7 +146,7 @@ test("the renderer in character.toml is built at startup and reported", async ()
 });
 
 test("a renderer that cannot be built stops the session before it starts", async () => {
-  // A character that says live2d but has no backend is a configuration mistake,
+  // A character that says live2d but names no model is a configuration mistake,
   // and the worst possible place to discover it is three turns in when nobody
   // can see the character.
   const dir = join(ROOT, "out", "_cli-renderer");
@@ -159,7 +159,7 @@ test("a renderer that cannot be built stops the session before it starts", async
   );
   const r = await runCli(["--character", dir], "", { ATTUNE_BASE_URL: "", ATTUNE_MODEL: "" });
   assert.equal(r.code, 1);
-  assert.match(r.stderr, /renderer error: .*live2d.*not implemented yet/);
+  assert.match(r.stderr, /renderer error: .*live2d.*needs a model/);
 });
 
 test("a vrm character loads its model before the first turn", async () => {

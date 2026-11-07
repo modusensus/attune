@@ -125,7 +125,16 @@ test("the stage passes the mouth value through to the backend", () => {
     id: "spy",
     frame(input: { mouth?: number; at: number; state: "listening" | "thinking" | "speaking"; gestures: Gesture[] }) {
       seen = input.mouth;
-      return { at: input.at, state: input.state, channels: {}, bones: {}, expressions: {}, dropped: [] };
+      return {
+        at: input.at,
+        state: input.state,
+        channels: {},
+        bones: {},
+        expressions: {},
+        parameters: {},
+        parametersAssumed: false,
+        dropped: [],
+      };
     },
   };
   const stage = new Stage(spy);

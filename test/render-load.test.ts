@@ -41,7 +41,7 @@ test("a vrm character loads its model and the rig comes back with it", async () 
     assert.equal(loaded.backend.id, "vrm");
     assert.ok(loaded.rig);
     assert.equal(loaded.rig.rig.spec, "1.0");
-    assert.match(loaded.rig.path, /model\.vrm$/);
+    assert.match(loaded.modelPath ?? "", /model\.vrm$/);
   } finally {
     await c.cleanup();
   }
@@ -105,13 +105,13 @@ test("an empty model file says it is empty", async () => {
   }
 });
 
-test("live2d is refused by name rather than silently substituted", async () => {
+test("live2d without a model complains about the config, not about a file", async () => {
   const c = await character({ "character.toml": toml(["type = \"live2d\""]), "persona.md": "x" });
   try {
     const cfg = await loadCharacter(c.dir);
     await assert.rejects(() => rendererFromConfig(cfg), (err: Error) => {
       assert.ok(err instanceof RendererError);
-      assert.match(err.message, /renderer type "live2d" is not implemented yet/);
+      assert.match(err.message, /renderer type "live2d" needs a model/);
       return true;
     });
   } finally {
@@ -133,10 +133,11 @@ test("the type is trimmed and case-folded, and empty means none", () => {
   assert.throws(() => backendFor("  VRM "), /needs a model/);
 });
 
-test("rendererNeedsModel only says yes for vrm", () => {
+test("rendererNeedsModel says yes for every type that reads a file", () => {
   assert.equal(rendererNeedsModel("none"), false);
   assert.equal(rendererNeedsModel(""), false);
   assert.equal(rendererNeedsModel("vrm"), true);
   assert.equal(rendererNeedsModel(" VRM "), true);
-  assert.equal(rendererNeedsModel("live2d"), false, "live2d would need one, but it is refused before any file is touched");
+  assert.equal(rendererNeedsModel("live2d"), true);
+  assert.equal(rendererNeedsModel(" Live2D "), true);
 });
