@@ -41,7 +41,7 @@
 
 ## 3D 素材现状
 
-- **官方 MMD 模型免费，但只有 Q 版。** 官网路径：顶部导航【视听中心】→【MMD模型下载】→【前往下载】。二头身，不是游戏内正比形象。
+- **官方 MMD 模型多为免费，但常常只有 Q 版。** 一般藏在官网的视听中心 / 下载区，找得到但不在首页。二头身，不是游戏内正比形象。
 - **正比模型基本来自游戏内提取**，非官方发布。
 - **免费通用 VRM**：[VRoid Hub](https://hub.vroid.com) 上的 CC0 模型、[OpenGameArt 的 VRoid CC0 合集](https://opengameart.org/content/vroid-studio-cc0-models)。干净、合法，可以拿来跑通链路。
 - **格式转换**：官方给 pmx，three-vrm 要 vrm。路线是 Blender + [MMD Tools](https://extensions.blender.org/add-ons/mmd-tools/) 导入 pmx → [VRM Add-on for Blender](https://extensions.blender.org/add-ons/vrm/) 导出 vrm。卡点通常是 VRM 要求的手指骨骼与眼睛骨骼，Q 版模型往往没有。
@@ -55,3 +55,5 @@
 也就是说，自用通常是被官方允许的，不是「没人管」。分发、商用、做成服务是另一回事。
 
 条款会改。逐条引用前请回该作品官方站点的 UGC 政策核对；部分厂商对 MMD 素材另有专门指南，那份常常单独成页、容易漏看。
+
+本仓库**不存放任何此类素材**。角色配置里只写路径，素材留在使用者本机。
