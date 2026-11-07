@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { SilentSpeech, SapiSpeech, HttpSpeech, SpeechError, speechFromConfig } from "../src/speech.ts";
 import { encodeWav } from "../src/audio/wav.ts";
+import { HAS_SAPI_VOICE, SAPI_GAP } from "./fixtures/sapi.ts";
 
 const IS_WIN = process.platform === "win32";
 
@@ -132,7 +133,10 @@ test("sapi refuses to pretend it works on a non-Windows host", { skip: IS_WIN },
   await assert.rejects(() => new SapiSpeech().speak("hi"), /only runs on Windows/);
 });
 
-test("sapi really synthesizes audio on Windows", { skip: !IS_WIN, timeout: 120000 }, async () => {
+// Skipped on a Windows host with no voice installed, with the reason attached:
+// the runner image ships bare, and "platform is right but there is nothing to
+// speak with" is not the same failure as "the code is broken".
+test("sapi really synthesizes audio on Windows", { skip: HAS_SAPI_VOICE ? false : SAPI_GAP, timeout: 120000 }, async () => {
   // Integration, not a unit test: it proves the PowerShell child, the temp
   // files, the encoding and the decoder all work together on a stock box.
   const clip = await new SapiSpeech().speak("今晚有人来吗？");

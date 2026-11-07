@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildMessages, buildSystemPrompt, loadPersona } from "../src/persona.ts";
 import type { Turn } from "../src/types.ts";
+
+/** Relative, not absolute: a fixture path pinned to one developer's disk is a test that only runs on one disk. */
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const persona = "你是小满，一个在旧书店上夜班的人。";
 const history: Turn[] = [
@@ -38,5 +43,5 @@ test("messages replay history before the new utterance", async () => {
 });
 
 test("an empty persona card is an error, not a silent empty prompt", async () => {
-  await assert.rejects(() => loadPersona("D:/attune/test/fixtures/empty-persona.md"), /persona card is empty/);
+  await assert.rejects(() => loadPersona(join(HERE, "fixtures", "empty-persona.md")), /persona card is empty/);
 });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { HAS_SAPI_VOICE, SAPI_GAP } from "./fixtures/sapi.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NL = String.fromCharCode(10);
@@ -97,7 +98,8 @@ test("--say-file drives one turn from a wav with no microphone", async () => {
   assert.match(r.stderr, /nothing was recognised, so there is no turn to take/);
 });
 
-test("--say-file with a real recogniser takes the recognised turn", { skip: process.platform !== "win32" }, async () => {
+// Needs a voice to make the wav as well as an engine to read it back.
+test("--say-file with a real recogniser takes the recognised turn", { skip: HAS_SAPI_VOICE ? false : SAPI_GAP }, async () => {
   const dir = join(ROOT, "out", "_cli-say2");
   const wavPath = join(dir, "in.wav");
   const characterDir = join(dir, "character");

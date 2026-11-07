@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SapiAsr, asrFromConfigWithSapi } from "../src/asr-sapi.ts";
 import { SapiSpeech, SilentSpeech } from "../src/speech.ts";
+import { HAS_SAPI_VOICE, SAPI_GAP } from "./fixtures/sapi.ts";
 
 const IS_WIN = process.platform === "win32";
 
@@ -23,7 +24,9 @@ function overlap(a: string, b: string): number {
   return hits / Math.max(x.length, y.length);
 }
 
-test("sapi ears: a synthesised sentence comes back as roughly that sentence", { skip: !IS_WIN }, async () => {
+// This one needs a voice to produce the audio it recognises, so it skips on a
+// Windows host that has none - and says which of the two platforms it is on.
+test("sapi ears: a synthesised sentence comes back as roughly that sentence", { skip: HAS_SAPI_VOICE ? false : SAPI_GAP }, async () => {
   const said = "今晚有人来吗";
   const clip = await new SapiSpeech().speak(said);
   const t = await new SapiAsr({ language: "zh-CN" }).transcribe(clip.audio);
